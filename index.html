@@ -182,6 +182,28 @@ body{
 .ptbl tfoot th,.ptbl tfoot td{position:sticky;bottom:0;background:var(--ink2);border-top:2px solid var(--line);z-index:2}
 .ptbl tfoot .mh{z-index:3}
 .ptbl tfoot .tot{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--cream)}
+/* Current / live match */
+.livecard{background:linear-gradient(135deg,var(--panel) 0%, var(--ink) 100%);border:1px solid var(--line);border-radius:16px;padding:14px 15px}
+.lvtop{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.livetag{display:inline-flex;align-items:center;gap:7px;background:rgba(255,92,58,.14);color:#ffb9a8;
+  border:1px solid rgba(255,92,58,.4);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:1.2px}
+.nexttag{display:inline-flex;align-items:center;gap:7px;background:rgba(255,194,60,.12);color:#ffdc93;
+  border:1px solid rgba(255,194,60,.34);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:1px}
+.lmore{color:var(--muted);font-size:11px;font-weight:700}
+.lvmatch{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:6px 0 2px}
+.lvtm{font-weight:800;font-size:16px;letter-spacing:.2px}
+.lvscore{display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue',sans-serif}
+.lvscore b{min-width:26px;text-align:center;font-size:30px;color:var(--gold);line-height:1}
+.lvscore i{color:var(--muted);font-style:normal;font-size:22px;margin:0 1px}
+.lvcap{color:var(--muted);font-size:12px;line-height:1.5;margin:8px 2px 12px;text-align:center}
+.lvcap b{color:var(--cream)}
+.lvlist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lrow{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.lrow.win{border-color:rgba(255,194,60,.34);background:rgba(255,194,60,.06)}
+.lname{flex:1;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lpred{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.lrow .pp{font-family:'Bebas Neue',sans-serif;font-size:17px;font-weight:400;width:auto;text-align:right}
+@media (max-width:460px){ .lvlist{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -189,7 +211,7 @@ body{
   <header class="board">
     <div class="crown">
       <h1 class="title"><span class="ball">⚽</span> Polla Mundialera <span class="y">2026</span></h1>
-      <span class="live"><span class="dot"></span> EN VIVO</span>
+      <span class="live" id="liveBadge" style="display:none"><span class="dot"></span> EN VIVO</span>
     </div>
     <p class="sub">Club de Tobi · <b>Fase de Grupos</b> · 9 participantes</p>
     <div class="meta">
@@ -202,6 +224,9 @@ body{
 
   <div class="eyebrow">Tabla de posiciones</div>
   <div id="standings"></div>
+
+  <div class="eyebrow">Partido en juego</div>
+  <div id="live"></div>
 
   <div class="eyebrow">Últimos resultados</div>
   <div class="scrollx" id="recent"></div>
@@ -221,12 +246,12 @@ body{
     </div>
     Toca a un participante para ver su detalle partido a partido. La tabla se actualiza sola cada minuto a medida que terminan los partidos.
     <div style="margin-top:12px"><button class="btn" id="refresh">↻ Actualizar ahora</button></div>
-    <div class="src">Resultados en vivo vía <a href="https://github.com/openfootball/worldcup.json" target="_blank" rel="noopener">openfootball</a> (datos comunitarios; pueden tardar unos minutos tras el pitazo final). Sin clave ni servidor.</div>
+    <div class="src">Resultados finales vía <a href="https://github.com/openfootball/worldcup.json" target="_blank" rel="noopener">openfootball</a> · marcador en vivo vía scoreboard público de ESPN. Datos abiertos, sin clave ni servidor; pueden tener algún minuto de retraso.</div>
   </div>
 </div>
 
 <script>
-const DATA = {"fixtures": [{"n": 1, "group": "A", "home": "MEX", "away": "RSA", "date": "2026-06-11"}, {"n": 2, "group": "A", "home": "KOR", "away": "CZE", "date": "2026-06-11"}, {"n": 3, "group": "A", "home": "MEX", "away": "KOR", "date": "2026-06-18"}, {"n": 4, "group": "A", "home": "CZE", "away": "RSA", "date": "2026-06-18"}, {"n": 5, "group": "A", "home": "MEX", "away": "CZE", "date": "2026-06-24"}, {"n": 6, "group": "A", "home": "RSA", "away": "KOR", "date": "2026-06-24"}, {"n": 7, "group": "B", "home": "CAN", "away": "QAT", "date": "2026-06-18"}, {"n": 8, "group": "B", "home": "SUI", "away": "BIH", "date": "2026-06-18"}, {"n": 9, "group": "B", "home": "CAN", "away": "SUI", "date": "2026-06-24"}, {"n": 10, "group": "B", "home": "BIH", "away": "QAT", "date": "2026-06-24"}, {"n": 11, "group": "B", "home": "CAN", "away": "BIH", "date": "2026-06-12"}, {"n": 12, "group": "B", "home": "QAT", "away": "SUI", "date": "2026-06-13"}, {"n": 13, "group": "C", "home": "BRA", "away": "MAR", "date": "2026-06-13"}, {"n": 14, "group": "C", "home": "HAI", "away": "SCO", "date": "2026-06-13"}, {"n": 15, "group": "C", "home": "BRA", "away": "HAI", "date": "2026-06-19"}, {"n": 16, "group": "C", "home": "SCO", "away": "MAR", "date": "2026-06-19"}, {"n": 17, "group": "C", "home": "BRA", "away": "SCO", "date": "2026-06-24"}, {"n": 18, "group": "C", "home": "MAR", "away": "HAI", "date": "2026-06-24"}, {"n": 19, "group": "D", "home": "USA", "away": "PAR", "date": "2026-06-12"}, {"n": 20, "group": "D", "home": "AUS", "away": "TUR", "date": "2026-06-13"}, {"n": 21, "group": "D", "home": "USA", "away": "AUS", "date": "2026-06-19"}, {"n": 22, "group": "D", "home": "TUR", "away": "PAR", "date": "2026-06-19"}, {"n": 23, "group": "D", "home": "USA", "away": "TUR", "date": "2026-06-25"}, {"n": 24, "group": "D", "home": "PAR", "away": "AUS", "date": "2026-06-25"}, {"n": 25, "group": "E", "home": "GER", "away": "CUW", "date": "2026-06-14"}, {"n": 26, "group": "E", "home": "CIV", "away": "ECU", "date": "2026-06-14"}, {"n": 27, "group": "E", "home": "GER", "away": "CIV", "date": "2026-06-20"}, {"n": 28, "group": "E", "home": "ECU", "away": "CUW", "date": "2026-06-20"}, {"n": 29, "group": "E", "home": "GER", "away": "ECU", "date": "2026-06-25"}, {"n": 30, "group": "E", "home": "CUW", "away": "CIV", "date": "2026-06-25"}, {"n": 31, "group": "F", "home": "NED", "away": "JPN", "date": "2026-06-14"}, {"n": 32, "group": "F", "home": "TUN", "away": "SWE", "date": "2026-06-14"}, {"n": 33, "group": "F", "home": "NED", "away": "TUN", "date": "2026-06-25"}, {"n": 34, "group": "F", "home": "SWE", "away": "JPN", "date": "2026-06-25"}, {"n": 35, "group": "F", "home": "NED", "away": "SWE", "date": "2026-06-20"}, {"n": 36, "group": "F", "home": "JPN", "away": "TUN", "date": "2026-06-20"}, {"n": 37, "group": "G", "home": "BEL", "away": "EGY", "date": "2026-06-15"}, {"n": 38, "group": "G", "home": "IRN", "away": "NZL", "date": "2026-06-15"}, {"n": 39, "group": "G", "home": "BEL", "away": "IRN", "date": "2026-06-21"}, {"n": 40, "group": "G", "home": "NZL", "away": "EGY", "date": "2026-06-21"}, {"n": 41, "group": "G", "home": "BEL", "away": "NZL", "date": "2026-06-26"}, {"n": 42, "group": "G", "home": "EGY", "away": "IRN", "date": "2026-06-26"}, {"n": 43, "group": "H", "home": "ESP", "away": "CPV", "date": "2026-06-15"}, {"n": 44, "group": "H", "home": "KSA", "away": "URU", "date": "2026-06-15"}, {"n": 45, "group": "H", "home": "ESP", "away": "KSA", "date": "2026-06-21"}, {"n": 46, "group": "H", "home": "URU", "away": "CPV", "date": "2026-06-21"}, {"n": 47, "group": "H", "home": "ESP", "away": "URU", "date": "2026-06-26"}, {"n": 48, "group": "H", "home": "CPV", "away": "KSA", "date": "2026-06-26"}, {"n": 49, "group": "I", "home": "FRA", "away": "SEN", "date": "2026-06-16"}, {"n": 50, "group": "I", "home": "NOR", "away": "IRQ", "date": "2026-06-16"}, {"n": 51, "group": "I", "home": "FRA", "away": "NOR", "date": "2026-06-26"}, {"n": 52, "group": "I", "home": "IRQ", "away": "SEN", "date": "2026-06-26"}, {"n": 53, "group": "I", "home": "FRA", "away": "IRQ", "date": "2026-06-22"}, {"n": 54, "group": "I", "home": "SEN", "away": "NOR", "date": "2026-06-22"}, {"n": 55, "group": "J", "home": "ARG", "away": "ALG", "date": "2026-06-16"}, {"n": 56, "group": "J", "home": "AUT", "away": "JOR", "date": "2026-06-16"}, {"n": 57, "group": "J", "home": "ARG", "away": "AUT", "date": "2026-06-22"}, {"n": 58, "group": "J", "home": "JOR", "away": "ALG", "date": "2026-06-22"}, {"n": 59, "group": "J", "home": "ARG", "away": "JOR", "date": "2026-06-27"}, {"n": 60, "group": "J", "home": "ALG", "away": "AUT", "date": "2026-06-27"}, {"n": 61, "group": "K", "home": "POR", "away": "COL", "date": "2026-06-27"}, {"n": 62, "group": "K", "home": "UZB", "away": "COD", "date": "2026-06-27"}, {"n": 63, "group": "K", "home": "POR", "away": "UZB", "date": "2026-06-23"}, {"n": 64, "group": "K", "home": "COD", "away": "COL", "date": "2026-06-23"}, {"n": 65, "group": "K", "home": "POR", "away": "COD", "date": "2026-06-17"}, {"n": 66, "group": "K", "home": "COL", "away": "UZB", "date": "2026-06-17"}, {"n": 67, "group": "L", "home": "ENG", "away": "CRO", "date": "2026-06-17"}, {"n": 68, "group": "L", "home": "GHA", "away": "PAN", "date": "2026-06-17"}, {"n": 69, "group": "L", "home": "ENG", "away": "GHA", "date": "2026-06-23"}, {"n": 70, "group": "L", "home": "PAN", "away": "CRO", "date": "2026-06-23"}, {"n": 71, "group": "L", "home": "ENG", "away": "PAN", "date": "2026-06-27"}, {"n": 72, "group": "L", "home": "CRO", "away": "GHA", "date": "2026-06-27"}], "participants": [{"name": "Hernán", "preds": [[3, 0], [2, 1], [1, 3], [1, 1], [2, 1], [0, 0], [0, 0], [2, 1], [2, 0], [1, 3], [2, 2], [1, 3], [2, 0], [1, 3], [4, 1], [3, 1], [3, 0], [2, 0], [0, 2], [0, 0], [0, 2], [2, 3], [4, 2], [3, 0], [4, 0], [1, 3], [5, 1], [3, 2], [3, 1], [0, 0], [3, 1], [2, 2], [2, 1], [2, 3], [4, 2], [3, 1], [4, 2], [3, 2], [2, 3], [1, 1], [3, 2], [0, 3], [3, 1], [1, 3], [4, 1], [3, 0], [1, 3], [0, 0], [4, 2], [2, 3], [3, 1], [1, 4], [4, 2], [3, 1], [4, 1], [2, 1], [1, 2], [2, 2], [3, 1], [2, 4], [2, 3], [1, 0], [4, 2], [1, 3], [5, 2], [3, 1], [2, 2], [0, 0], [4, 1], [1, 3], [4, 1], [3, 2]]}, {"name": "Víctor", "preds": [[2, 0], [1, 2], [2, 1], [2, 0], [2, 1], [1, 2], [2, 1], [2, 0], [1, 2], [2, 1], [2, 1], [0, 2], [2, 1], [0, 3], [4, 0], [1, 1], [2, 1], [2, 0], [2, 1], [1, 1], [2, 1], [1, 2], [2, 0], [1, 1], [4, 0], [1, 2], [2, 0], [3, 0], [2, 1], [0, 2], [2, 1], [1, 1], [2, 0], [1, 2], [3, 0], [1, 1], [2, 0], [2, 1], [2, 1], [2, 1], [3, 0], [1, 1], [3, 0], [0, 2], [2, 0], [2, 1], [2, 1], [1, 1], [2, 1], [3, 1], [2, 1], [0, 2], [3, 0], [1, 1], [3, 0], [2, 0], [2, 1], [1, 2], [4, 0], [1, 1], [2, 1], [2, 1], [3, 0], [2, 1], [2, 0], [3, 0], [2, 0], [1, 1], [3, 1], [1, 2], [3, 1], [2, 1]]}, {"name": "Gustavo", "preds": [[3, 2], [1, 2], [3, 1], [2, 0], [1, 2], [1, 1], [3, 0], [2, 1], [1, 3], [2, 2], [2, 0], [0, 3], [1, 0], [2, 1], [2, 1], [2, 3], [2, 0], [2, 1], [2, 1], [1, 3], [2, 0], [2, 1], [0, 1], [2, 1], [4, 0], [2, 1], [2, 2], [3, 1], [2, 1], [0, 3], [2, 1], [2, 2], [3, 1], [2, 2], [2, 1], [1, 2], [2, 0], [2, 1], [3, 1], [1, 2], [3, 1], [2, 2], [4, 0], [1, 3], [3, 0], [2, 0], [3, 1], [0, 2], [2, 1], [3, 1], [2, 2], [1, 2], [3, 1], [2, 3], [3, 2], [2, 1], [3, 2], [2, 2], [3, 0], [1, 2], [3, 2], [2, 1], [3, 1], [0, 2], [4, 1], [2, 2], [2, 2], [1, 1], [2, 0], [0, 2], [2, 1], [2, 0]]}, {"name": "Pablo A.", "preds": [[2, 1], [1, 1], [1, 1], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [1, 2], [3, 1], [1, 0], [0, 2], [2, 1], [0, 2], [3, 0], [1, 1], [2, 0], [2, 0], [2, 1], [1, 2], [2, 1], [1, 1], [2, 1], [1, 1], [3, 0], [1, 1], [2, 0], [2, 0], [2, 1], [0, 2], [2, 1], [1, 2], [2, 0], [1, 2], [1, 1], [2, 0], [2, 1], [2, 0], [2, 0], [0, 2], [3, 0], [1, 1], [3, 0], [0, 2], [3, 0], [2, 0], [1, 1], [2, 1], [2, 1], [3, 0], [2, 1], [0, 1], [4, 0], [1, 1], [2, 0], [2, 0], [2, 1], [0, 2], [3, 0], [1, 1], [2, 2], [1, 0], [2, 0], [1, 2], [4, 0], [2, 0], [2, 1], [2, 0], [3, 1], [0, 2], [4, 1], [2, 1]]}, {"name": "Juan Pablo", "preds": [[2, 1], [1, 1], [2, 2], [2, 0], [2, 0], [1, 2], [2, 0], [2, 1], [1, 1], [2, 0], [1, 1], [0, 3], [2, 1], [0, 2], [4, 0], [1, 1], [3, 0], [2, 0], [2, 1], [2, 1], [2, 0], [1, 1], [2, 1], [1, 1], [4, 0], [2, 2], [3, 1], [2, 0], [2, 0], [0, 3], [2, 1], [1, 1], [2, 0], [1, 1], [2, 1], [2, 0], [2, 1], [1, 0], [2, 0], [1, 0], [3, 0], [1, 1], [3, 0], [0, 2], [2, 0], [2, 0], [1, 1], [1, 1], [2, 1], [2, 0], [2, 1], [1, 1], [3, 0], [1, 2], [2, 0], [2, 0], [2, 1], [1, 1], [3, 0], [1, 1], [2, 1], [0, 0], [3, 0], [0, 2], [3, 1], [2, 0], [1, 2], [1, 2], [2, 0], [0, 2], [3, 0], [2, 0]]}, {"name": "Fernando", "preds": [[2, 0], [1, 1], [2, 1], [1, 0], [1, 1], [1, 2], [1, 0], [2, 1], [1, 1], [0, 0], [0, 0], [0, 1], [2, 1], [0, 2], [3, 0], [1, 1], [2, 1], [2, 0], [1, 1], [0, 1], [1, 0], [1, 0], [1, 1], [1, 0], [3, 0], [1, 2], [2, 0], [2, 0], [2, 1], [0, 1], [1, 1], [2, 1], [1, 0], [1, 1], [2, 1], [0, 0], [1, 0], [1, 0], [2, 1], [0, 1], [2, 0], [2, 1], [3, 0], [0, 2], [2, 1], [2, 0], [2, 2], [0, 1], [1, 1], [2, 0], [2, 1], [1, 2], [2, 0], [1, 1], [1, 0], [1, 0], [2, 1], [0, 1], [2, 0], [1, 1], [1, 1], [1, 1], [2, 1], [1, 2], [2, 0], [1, 0], [2, 1], [2, 0], [2, 1], [0, 1], [2, 0], [0, 0]]}, {"name": "Pablo R.", "preds": [[2, 2], [2, 1], [2, 1], [3, 1], [3, 2], [1, 2], [1, 1], [1, 1], [1, 2], [3, 0], [1, 2], [1, 2], [2, 2], [0, 2], [5, 0], [1, 2], [3, 1], [3, 0], [2, 2], [1, 1], [2, 1], [1, 2], [3, 1], [2, 1], [5, 0], [2, 2], [2, 1], [3, 0], [3, 2], [0, 4], [3, 2], [1, 2], [2, 1], [1, 3], [3, 1], [2, 0], [3, 1], [1, 2], [2, 0], [1, 0], [2, 0], [0, 0], [3, 0], [1, 3], [3, 1], [2, 0], [2, 1], [0, 1], [3, 2], [2, 0], [2, 1], [0, 2], [3, 0], [1, 1], [3, 0], [1, 0], [2, 1], [0, 0], [2, 0], [0, 2], [2, 2], [1, 1], [2, 0], [0, 2], [3, 0], [2, 0], [2, 2], [2, 1], [2, 1], [1, 3], [3, 0], [2, 1]]}, {"name": "Rodrigo", "preds": [[3, 1], [2, 1], [1, 1], [3, 1], [2, 2], [1, 3], [1, 1], [3, 1], [1, 2], [2, 2], [2, 2], [0, 4], [2, 1], [0, 4], [6, 0], [1, 1], [3, 1], [3, 0], [3, 1], [1, 2], [3, 1], [2, 0], [2, 0], [1, 1], [4, 0], [1, 1], [3, 1], [3, 0], [3, 1], [0, 2], [2, 2], [2, 2], [3, 1], [1, 3], [3, 2], [2, 0], [3, 0], [1, 1], [3, 0], [0, 1], [3, 0], [2, 2], [4, 0], [1, 2], [3, 0], [3, 0], [2, 1], [1, 1], [4, 1], [2, 0], [3, 1], [1, 1], [4, 1], [1, 2], [2, 0], [1, 0], [2, 0], [1, 2], [3, 0], [2, 2], [2, 1], [1, 1], [3, 0], [1, 3], [4, 1], [3, 0], [2, 2], [2, 1], [2, 0], [1, 3], [3, 1], [3, 1]]}, {"name": "Raúl", "preds": [[1, 2], [1, 2], [2, 1], [1, 1], [0, 2], [1, 0], [2, 1], [1, 2], [2, 1], [2, 1], [1, 1], [1, 2], [2, 1], [0, 2], [3, 0], [2, 2], [2, 0], [3, 0], [2, 1], [2, 0], [1, 2], [1, 3], [2, 0], [2, 0], [4, 0], [1, 3], [3, 0], [3, 1], [2, 1], [1, 3], [2, 1], [1, 3], [1, 3], [0, 2], [2, 0], [2, 1], [3, 1], [2, 1], [2, 0], [1, 0], [2, 0], [2, 1], [3, 0], [1, 3], [2, 0], [2, 0], [1, 2], [0, 3], [3, 0], [1, 1], [2, 0], [0, 2], [3, 1], [1, 0], [2, 0], [2, 0], [1, 0], [1, 3], [3, 1], [2, 2], [3, 0], [1, 0], [2, 0], [0, 2], [2, 0], [3, 1], [2, 2], [2, 0], [1, 0], [0, 3], [3, 0], [2, 0]]}], "en2code": {"mexico": "MEX", "south africa": "RSA", "south korea": "KOR", "czech republic": "CZE", "canada": "CAN", "qatar": "QAT", "switzerland": "SUI", "bosnia & herzegovina": "BIH", "brazil": "BRA", "morocco": "MAR", "haiti": "HAI", "scotland": "SCO", "usa": "USA", "paraguay": "PAR", "australia": "AUS", "turkey": "TUR", "germany": "GER", "curacao": "CUW", "ivory coast": "CIV", "ecuador": "ECU", "netherlands": "NED", "japan": "JPN", "tunisia": "TUN", "sweden": "SWE", "belgium": "BEL", "egypt": "EGY", "iran": "IRN", "new zealand": "NZL", "spain": "ESP", "cape verde": "CPV", "saudi arabia": "KSA", "uruguay": "URU", "france": "FRA", "senegal": "SEN", "norway": "NOR", "iraq": "IRQ", "argentina": "ARG", "algeria": "ALG", "austria": "AUT", "jordan": "JOR", "portugal": "POR", "colombia": "COL", "uzbekistan": "UZB", "dr congo": "COD", "england": "ENG", "croatia": "CRO", "ghana": "GHA", "panama": "PAN"}, "flags": {"MEX": "🇲🇽", "RSA": "🇿🇦", "KOR": "🇰🇷", "CZE": "🇨🇿", "CAN": "🇨🇦", "QAT": "🇶🇦", "SUI": "🇨🇭", "BIH": "🇧🇦", "BRA": "🇧🇷", "MAR": "🇲🇦", "HAI": "🇭🇹", "SCO": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "USA": "🇺🇸", "PAR": "🇵🇾", "AUS": "🇦🇺", "TUR": "🇹🇷", "GER": "🇩🇪", "CUW": "🇨🇼", "CIV": "🇨🇮", "ECU": "🇪🇨", "NED": "🇳🇱", "JPN": "🇯🇵", "TUN": "🇹🇳", "SWE": "🇸🇪", "BEL": "🇧🇪", "EGY": "🇪🇬", "IRN": "🇮🇷", "NZL": "🇳🇿", "ESP": "🇪🇸", "CPV": "🇨🇻", "KSA": "🇸🇦", "URU": "🇺🇾", "FRA": "🇫🇷", "SEN": "🇸🇳", "NOR": "🇳🇴", "IRQ": "🇮🇶", "ARG": "🇦🇷", "ALG": "🇩🇿", "AUT": "🇦🇹", "JOR": "🇯🇴", "POR": "🇵🇹", "COL": "🇨🇴", "UZB": "🇺🇿", "COD": "🇨🇩", "ENG": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "CRO": "🇭🇷", "GHA": "🇬🇭", "PAN": "🇵🇦"}, "fallback": {"1": [2, 0], "2": [2, 1], "11": [1, 1]}, "feedUrl": "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"};
+const DATA = {"fixtures": [{"n": 1, "group": "A", "home": "MEX", "away": "RSA", "date": "2026-06-11"}, {"n": 2, "group": "A", "home": "KOR", "away": "CZE", "date": "2026-06-11"}, {"n": 3, "group": "A", "home": "MEX", "away": "KOR", "date": "2026-06-18"}, {"n": 4, "group": "A", "home": "CZE", "away": "RSA", "date": "2026-06-18"}, {"n": 5, "group": "A", "home": "MEX", "away": "CZE", "date": "2026-06-24"}, {"n": 6, "group": "A", "home": "RSA", "away": "KOR", "date": "2026-06-24"}, {"n": 7, "group": "B", "home": "CAN", "away": "QAT", "date": "2026-06-18"}, {"n": 8, "group": "B", "home": "SUI", "away": "BIH", "date": "2026-06-18"}, {"n": 9, "group": "B", "home": "CAN", "away": "SUI", "date": "2026-06-24"}, {"n": 10, "group": "B", "home": "BIH", "away": "QAT", "date": "2026-06-24"}, {"n": 11, "group": "B", "home": "CAN", "away": "BIH", "date": "2026-06-12"}, {"n": 12, "group": "B", "home": "QAT", "away": "SUI", "date": "2026-06-13"}, {"n": 13, "group": "C", "home": "BRA", "away": "MAR", "date": "2026-06-13"}, {"n": 14, "group": "C", "home": "HAI", "away": "SCO", "date": "2026-06-13"}, {"n": 15, "group": "C", "home": "BRA", "away": "HAI", "date": "2026-06-19"}, {"n": 16, "group": "C", "home": "SCO", "away": "MAR", "date": "2026-06-19"}, {"n": 17, "group": "C", "home": "BRA", "away": "SCO", "date": "2026-06-24"}, {"n": 18, "group": "C", "home": "MAR", "away": "HAI", "date": "2026-06-24"}, {"n": 19, "group": "D", "home": "USA", "away": "PAR", "date": "2026-06-12"}, {"n": 20, "group": "D", "home": "AUS", "away": "TUR", "date": "2026-06-13"}, {"n": 21, "group": "D", "home": "USA", "away": "AUS", "date": "2026-06-19"}, {"n": 22, "group": "D", "home": "TUR", "away": "PAR", "date": "2026-06-19"}, {"n": 23, "group": "D", "home": "USA", "away": "TUR", "date": "2026-06-25"}, {"n": 24, "group": "D", "home": "PAR", "away": "AUS", "date": "2026-06-25"}, {"n": 25, "group": "E", "home": "GER", "away": "CUW", "date": "2026-06-14"}, {"n": 26, "group": "E", "home": "CIV", "away": "ECU", "date": "2026-06-14"}, {"n": 27, "group": "E", "home": "GER", "away": "CIV", "date": "2026-06-20"}, {"n": 28, "group": "E", "home": "ECU", "away": "CUW", "date": "2026-06-20"}, {"n": 29, "group": "E", "home": "GER", "away": "ECU", "date": "2026-06-25"}, {"n": 30, "group": "E", "home": "CUW", "away": "CIV", "date": "2026-06-25"}, {"n": 31, "group": "F", "home": "NED", "away": "JPN", "date": "2026-06-14"}, {"n": 32, "group": "F", "home": "TUN", "away": "SWE", "date": "2026-06-14"}, {"n": 33, "group": "F", "home": "NED", "away": "TUN", "date": "2026-06-25"}, {"n": 34, "group": "F", "home": "SWE", "away": "JPN", "date": "2026-06-25"}, {"n": 35, "group": "F", "home": "NED", "away": "SWE", "date": "2026-06-20"}, {"n": 36, "group": "F", "home": "JPN", "away": "TUN", "date": "2026-06-20"}, {"n": 37, "group": "G", "home": "BEL", "away": "EGY", "date": "2026-06-15"}, {"n": 38, "group": "G", "home": "IRN", "away": "NZL", "date": "2026-06-15"}, {"n": 39, "group": "G", "home": "BEL", "away": "IRN", "date": "2026-06-21"}, {"n": 40, "group": "G", "home": "NZL", "away": "EGY", "date": "2026-06-21"}, {"n": 41, "group": "G", "home": "BEL", "away": "NZL", "date": "2026-06-26"}, {"n": 42, "group": "G", "home": "EGY", "away": "IRN", "date": "2026-06-26"}, {"n": 43, "group": "H", "home": "ESP", "away": "CPV", "date": "2026-06-15"}, {"n": 44, "group": "H", "home": "KSA", "away": "URU", "date": "2026-06-15"}, {"n": 45, "group": "H", "home": "ESP", "away": "KSA", "date": "2026-06-21"}, {"n": 46, "group": "H", "home": "URU", "away": "CPV", "date": "2026-06-21"}, {"n": 47, "group": "H", "home": "ESP", "away": "URU", "date": "2026-06-26"}, {"n": 48, "group": "H", "home": "CPV", "away": "KSA", "date": "2026-06-26"}, {"n": 49, "group": "I", "home": "FRA", "away": "SEN", "date": "2026-06-16"}, {"n": 50, "group": "I", "home": "NOR", "away": "IRQ", "date": "2026-06-16"}, {"n": 51, "group": "I", "home": "FRA", "away": "NOR", "date": "2026-06-26"}, {"n": 52, "group": "I", "home": "IRQ", "away": "SEN", "date": "2026-06-26"}, {"n": 53, "group": "I", "home": "FRA", "away": "IRQ", "date": "2026-06-22"}, {"n": 54, "group": "I", "home": "SEN", "away": "NOR", "date": "2026-06-22"}, {"n": 55, "group": "J", "home": "ARG", "away": "ALG", "date": "2026-06-16"}, {"n": 56, "group": "J", "home": "AUT", "away": "JOR", "date": "2026-06-16"}, {"n": 57, "group": "J", "home": "ARG", "away": "AUT", "date": "2026-06-22"}, {"n": 58, "group": "J", "home": "JOR", "away": "ALG", "date": "2026-06-22"}, {"n": 59, "group": "J", "home": "ARG", "away": "JOR", "date": "2026-06-27"}, {"n": 60, "group": "J", "home": "ALG", "away": "AUT", "date": "2026-06-27"}, {"n": 61, "group": "K", "home": "POR", "away": "COL", "date": "2026-06-27"}, {"n": 62, "group": "K", "home": "UZB", "away": "COD", "date": "2026-06-27"}, {"n": 63, "group": "K", "home": "POR", "away": "UZB", "date": "2026-06-23"}, {"n": 64, "group": "K", "home": "COD", "away": "COL", "date": "2026-06-23"}, {"n": 65, "group": "K", "home": "POR", "away": "COD", "date": "2026-06-17"}, {"n": 66, "group": "K", "home": "COL", "away": "UZB", "date": "2026-06-17"}, {"n": 67, "group": "L", "home": "ENG", "away": "CRO", "date": "2026-06-17"}, {"n": 68, "group": "L", "home": "GHA", "away": "PAN", "date": "2026-06-17"}, {"n": 69, "group": "L", "home": "ENG", "away": "GHA", "date": "2026-06-23"}, {"n": 70, "group": "L", "home": "PAN", "away": "CRO", "date": "2026-06-23"}, {"n": 71, "group": "L", "home": "ENG", "away": "PAN", "date": "2026-06-27"}, {"n": 72, "group": "L", "home": "CRO", "away": "GHA", "date": "2026-06-27"}], "participants": [{"name": "Hernán", "preds": [[3, 0], [2, 1], [1, 3], [1, 1], [2, 1], [0, 0], [0, 0], [2, 1], [2, 0], [1, 3], [2, 2], [1, 3], [2, 0], [1, 3], [4, 1], [3, 1], [3, 0], [2, 0], [0, 2], [0, 0], [0, 2], [2, 3], [4, 2], [3, 0], [4, 0], [1, 3], [5, 1], [3, 2], [3, 1], [0, 0], [3, 1], [2, 2], [2, 1], [2, 3], [4, 2], [3, 1], [4, 2], [3, 2], [2, 3], [1, 1], [3, 2], [0, 3], [3, 1], [1, 3], [4, 1], [3, 0], [1, 3], [0, 0], [4, 2], [2, 3], [3, 1], [1, 4], [4, 2], [3, 1], [4, 1], [2, 1], [1, 2], [2, 2], [3, 1], [2, 4], [2, 3], [1, 0], [4, 2], [1, 3], [5, 2], [3, 1], [2, 2], [0, 0], [4, 1], [1, 3], [4, 1], [3, 2]]}, {"name": "Víctor", "preds": [[2, 0], [1, 2], [2, 1], [2, 0], [2, 1], [1, 2], [2, 1], [2, 0], [1, 2], [2, 1], [2, 1], [0, 2], [2, 1], [0, 3], [4, 0], [1, 1], [2, 1], [2, 0], [2, 1], [1, 1], [2, 1], [1, 2], [2, 0], [1, 1], [4, 0], [1, 2], [2, 0], [3, 0], [2, 1], [0, 2], [2, 1], [1, 1], [2, 0], [1, 2], [3, 0], [1, 1], [2, 0], [2, 1], [2, 1], [2, 1], [3, 0], [1, 1], [3, 0], [0, 2], [2, 0], [2, 1], [2, 1], [1, 1], [2, 1], [3, 1], [2, 1], [0, 2], [3, 0], [1, 1], [3, 0], [2, 0], [2, 1], [1, 2], [4, 0], [1, 1], [2, 1], [2, 1], [3, 0], [2, 1], [2, 0], [3, 0], [2, 0], [1, 1], [3, 1], [1, 2], [3, 1], [2, 1]]}, {"name": "Gustavo", "preds": [[3, 2], [1, 2], [3, 1], [2, 0], [1, 2], [1, 1], [3, 0], [2, 1], [1, 3], [2, 2], [2, 0], [0, 3], [1, 0], [2, 1], [2, 1], [2, 3], [2, 0], [2, 1], [2, 1], [1, 3], [2, 0], [2, 1], [0, 1], [2, 1], [4, 0], [2, 1], [2, 2], [3, 1], [2, 1], [0, 3], [2, 1], [2, 2], [3, 1], [2, 2], [2, 1], [1, 2], [2, 0], [2, 1], [3, 1], [1, 2], [3, 1], [2, 2], [4, 0], [1, 3], [3, 0], [2, 0], [3, 1], [0, 2], [2, 1], [3, 1], [2, 2], [1, 2], [3, 1], [2, 3], [3, 2], [2, 1], [3, 2], [2, 2], [3, 0], [1, 2], [3, 2], [2, 1], [3, 1], [0, 2], [4, 1], [2, 2], [2, 2], [1, 1], [2, 0], [0, 2], [2, 1], [2, 0]]}, {"name": "Pablo A.", "preds": [[2, 1], [1, 1], [1, 1], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [1, 2], [3, 1], [1, 0], [0, 2], [2, 1], [0, 2], [3, 0], [1, 1], [2, 0], [2, 0], [2, 1], [1, 2], [2, 1], [1, 1], [2, 1], [1, 1], [3, 0], [1, 1], [2, 0], [2, 0], [2, 1], [0, 2], [2, 1], [1, 2], [2, 0], [1, 2], [1, 1], [2, 0], [2, 1], [2, 0], [2, 0], [0, 2], [3, 0], [1, 1], [3, 0], [0, 2], [3, 0], [2, 0], [1, 1], [2, 1], [2, 1], [3, 0], [2, 1], [0, 1], [4, 0], [1, 1], [2, 0], [2, 0], [2, 1], [0, 2], [3, 0], [1, 1], [2, 2], [1, 0], [2, 0], [1, 2], [4, 0], [2, 0], [2, 1], [2, 0], [3, 1], [0, 2], [4, 1], [2, 1]]}, {"name": "Juan Pablo", "preds": [[2, 1], [1, 1], [2, 2], [2, 0], [2, 0], [1, 2], [2, 0], [2, 1], [1, 1], [2, 0], [1, 1], [0, 3], [2, 1], [0, 2], [4, 0], [1, 1], [3, 0], [2, 0], [2, 1], [2, 1], [2, 0], [1, 1], [2, 1], [1, 1], [4, 0], [2, 2], [3, 1], [2, 0], [2, 0], [0, 3], [2, 1], [1, 1], [2, 0], [1, 1], [2, 1], [2, 0], [2, 1], [1, 0], [2, 0], [1, 0], [3, 0], [1, 1], [3, 0], [0, 2], [2, 0], [2, 0], [1, 1], [1, 1], [2, 1], [2, 0], [2, 1], [1, 1], [3, 0], [1, 2], [2, 0], [2, 0], [2, 1], [1, 1], [3, 0], [1, 1], [2, 1], [0, 0], [3, 0], [0, 2], [3, 1], [2, 0], [1, 2], [1, 2], [2, 0], [0, 2], [3, 0], [2, 0]]}, {"name": "Fernando", "preds": [[2, 0], [1, 1], [2, 1], [1, 0], [1, 1], [1, 2], [1, 0], [2, 1], [1, 1], [0, 0], [0, 0], [0, 1], [2, 1], [0, 2], [3, 0], [1, 1], [2, 1], [2, 0], [1, 1], [0, 1], [1, 0], [1, 0], [1, 1], [1, 0], [3, 0], [1, 2], [2, 0], [2, 0], [2, 1], [0, 1], [1, 1], [2, 1], [1, 0], [1, 1], [2, 1], [0, 0], [1, 0], [1, 0], [2, 1], [0, 1], [2, 0], [2, 1], [3, 0], [0, 2], [2, 1], [2, 0], [2, 2], [0, 1], [1, 1], [2, 0], [2, 1], [1, 2], [2, 0], [1, 1], [1, 0], [1, 0], [2, 1], [0, 1], [2, 0], [1, 1], [1, 1], [1, 1], [2, 1], [1, 2], [2, 0], [1, 0], [2, 1], [2, 0], [2, 1], [0, 1], [2, 0], [0, 0]]}, {"name": "Pablo R.", "preds": [[2, 2], [2, 1], [2, 1], [3, 1], [3, 2], [1, 2], [1, 1], [1, 1], [1, 2], [3, 0], [1, 2], [1, 2], [2, 2], [0, 2], [5, 0], [1, 2], [3, 1], [3, 0], [2, 2], [1, 1], [2, 1], [1, 2], [3, 1], [2, 1], [5, 0], [2, 2], [2, 1], [3, 0], [3, 2], [0, 4], [3, 2], [1, 2], [2, 1], [1, 3], [3, 1], [2, 0], [3, 1], [1, 2], [2, 0], [1, 0], [2, 0], [0, 0], [3, 0], [1, 3], [3, 1], [2, 0], [2, 1], [0, 1], [3, 2], [2, 0], [2, 1], [0, 2], [3, 0], [1, 1], [3, 0], [1, 0], [2, 1], [0, 0], [2, 0], [0, 2], [2, 2], [1, 1], [2, 0], [0, 2], [3, 0], [2, 0], [2, 2], [2, 1], [2, 1], [1, 3], [3, 0], [2, 1]]}, {"name": "Rodrigo", "preds": [[3, 1], [2, 1], [1, 1], [3, 1], [2, 2], [1, 3], [1, 1], [3, 1], [1, 2], [2, 2], [2, 2], [0, 4], [2, 1], [0, 4], [6, 0], [1, 1], [3, 1], [3, 0], [3, 1], [1, 2], [3, 1], [2, 0], [2, 0], [1, 1], [4, 0], [1, 1], [3, 1], [3, 0], [3, 1], [0, 2], [2, 2], [2, 2], [3, 1], [1, 3], [3, 2], [2, 0], [3, 0], [1, 1], [3, 0], [0, 1], [3, 0], [2, 2], [4, 0], [1, 2], [3, 0], [3, 0], [2, 1], [1, 1], [4, 1], [2, 0], [3, 1], [1, 1], [4, 1], [1, 2], [2, 0], [1, 0], [2, 0], [1, 2], [3, 0], [2, 2], [2, 1], [1, 1], [3, 0], [1, 3], [4, 1], [3, 0], [2, 2], [2, 1], [2, 0], [1, 3], [3, 1], [3, 1]]}, {"name": "Raúl", "preds": [[1, 2], [1, 2], [2, 1], [1, 1], [0, 2], [1, 0], [2, 1], [1, 2], [2, 1], [2, 1], [1, 1], [1, 2], [2, 1], [0, 2], [3, 0], [2, 2], [2, 0], [3, 0], [2, 1], [2, 0], [1, 2], [1, 3], [2, 0], [2, 0], [4, 0], [1, 3], [3, 0], [3, 1], [2, 1], [1, 3], [2, 1], [1, 3], [1, 3], [0, 2], [2, 0], [2, 1], [3, 1], [2, 1], [2, 0], [1, 0], [2, 0], [2, 1], [3, 0], [1, 3], [2, 0], [2, 0], [1, 2], [0, 3], [3, 0], [1, 1], [2, 0], [0, 2], [3, 1], [1, 0], [2, 0], [2, 0], [1, 0], [1, 3], [3, 1], [2, 2], [3, 0], [1, 0], [2, 0], [0, 2], [2, 0], [3, 1], [2, 2], [2, 0], [1, 0], [0, 3], [3, 0], [2, 0]]}], "en2code": {"mexico": "MEX", "south africa": "RSA", "south korea": "KOR", "czech republic": "CZE", "canada": "CAN", "qatar": "QAT", "switzerland": "SUI", "bosnia & herzegovina": "BIH", "brazil": "BRA", "morocco": "MAR", "haiti": "HAI", "scotland": "SCO", "usa": "USA", "paraguay": "PAR", "australia": "AUS", "turkey": "TUR", "germany": "GER", "curacao": "CUW", "ivory coast": "CIV", "ecuador": "ECU", "netherlands": "NED", "japan": "JPN", "tunisia": "TUN", "sweden": "SWE", "belgium": "BEL", "egypt": "EGY", "iran": "IRN", "new zealand": "NZL", "spain": "ESP", "cape verde": "CPV", "saudi arabia": "KSA", "uruguay": "URU", "france": "FRA", "senegal": "SEN", "norway": "NOR", "iraq": "IRQ", "argentina": "ARG", "algeria": "ALG", "austria": "AUT", "jordan": "JOR", "portugal": "POR", "colombia": "COL", "uzbekistan": "UZB", "dr congo": "COD", "england": "ENG", "croatia": "CRO", "ghana": "GHA", "panama": "PAN"}, "flags": {"MEX": "🇲🇽", "RSA": "🇿🇦", "KOR": "🇰🇷", "CZE": "🇨🇿", "CAN": "🇨🇦", "QAT": "🇶🇦", "SUI": "🇨🇭", "BIH": "🇧🇦", "BRA": "🇧🇷", "MAR": "🇲🇦", "HAI": "🇭🇹", "SCO": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "USA": "🇺🇸", "PAR": "🇵🇾", "AUS": "🇦🇺", "TUR": "🇹🇷", "GER": "🇩🇪", "CUW": "🇨🇼", "CIV": "🇨🇮", "ECU": "🇪🇨", "NED": "🇳🇱", "JPN": "🇯🇵", "TUN": "🇹🇳", "SWE": "🇸🇪", "BEL": "🇧🇪", "EGY": "🇪🇬", "IRN": "🇮🇷", "NZL": "🇳🇿", "ESP": "🇪🇸", "CPV": "🇨🇻", "KSA": "🇸🇦", "URU": "🇺🇾", "FRA": "🇫🇷", "SEN": "🇸🇳", "NOR": "🇳🇴", "IRQ": "🇮🇶", "ARG": "🇦🇷", "ALG": "🇩🇿", "AUT": "🇦🇹", "JOR": "🇯🇴", "POR": "🇵🇹", "COL": "🇨🇴", "UZB": "🇺🇿", "COD": "🇨🇩", "ENG": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "CRO": "🇭🇷", "GHA": "🇬🇭", "PAN": "🇵🇦"}, "fallback": {"1": [2, 0], "2": [2, 1], "11": [1, 1]}, "feedUrl": "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json", "espnUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"};
 
 /* ====== PUNTAJE (edítalo si tu polla usa otro) ====== */
 const PTS_EXACTO = 5;
@@ -238,6 +263,7 @@ const norm = s => s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase
 const sgn = (a,b) => a>b?1:(a<b?-1:0);
 let lastFetch = null;        // Date of last successful live fetch
 let curResults = {};         // { n: [l,v] }
+let liveGames = {};          // { n: {l, v, clock} } partidos en juego (vía ESPN)
 
 // Parse live feed -> { n: [l,v] } oriented to each fixture's home/away
 function resultsFromFeed(matches){
@@ -334,6 +360,7 @@ function render(results){
       + '<span class="tm">'+f.away+'<span class="fl">'+(DATA.flags[f.away]||'')+'</span></span></div></div>';
   }).join('') : '<div class="empty" style="min-width:100%">Todavía sin resultados.</div>';
 
+  renderLive(results);
   renderChart(results);
   renderPointsTable(results);
 }
@@ -349,6 +376,7 @@ function relTime(d){
 function tickClock(){ $('#mUpd').textContent = relTime(lastFetch); }
 
 async function fetchLive(){
+  try{ await fetchEspnLive(); }catch(e){ /* sin marcador en vivo ahora; la tabla sigue funcionando */ }
   try{
     const res = await fetch(DATA.feedUrl, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -365,6 +393,8 @@ async function fetchLive(){
       $('#mUpd').textContent='respaldo';
       $('#warn').style.display='block';
       $('#warn').innerHTML='Mostrando resultados de respaldo (no pude conectar en vivo ahora). Reintentando…';
+    } else {
+      render(curResults);   // refresca la sección en vivo aunque openfootball falle un ciclo
     }
   }
 }
@@ -403,7 +433,7 @@ function renderChart(results){
 
   let maxV=0; series.forEach(s=> maxV=Math.max(maxV,s.cum[lastIdx]));
   const maxY = Math.max(5, Math.ceil(maxV/5)*5);
-  const W=720,H=380,mL=44,mR=14,mT=20,mB=44, iw=W-mL-mR, ih=H-mT-mB;
+  const W=720,H=494,mL=44,mR=14,mT=20,mB=44, iw=W-mL-mR, ih=H-mT-mB;
   const X=i=> mL + (N<=1?0:(i/(N-1))*iw);
   const Y=v=> mT + ih - (v/maxY)*ih;
 
@@ -449,6 +479,135 @@ function renderChart(results){
   });
 }
 
+/* ====== Partido en juego (marcador en vivo automático vía ESPN) ====== */
+function todayYMD(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+const CODES = new Set(Object.keys(DATA.flags));
+const ESPN_ALIAS = {"turkiye":"TUR","korea republic":"KOR","ir iran":"IRN","czechia":"CZE","cote divoire":"CIV","united states":"USA","dr congo":"COD","congo dr":"COD","bosnia and herzegovina":"BIH"};
+function espnCode(t){
+  if(!t) return null;
+  const ab = (t.abbreviation||'').toUpperCase();
+  if(CODES.has(ab)) return ab;
+  for(const k of [t.shortDisplayName, t.displayName, t.name, t.location]){
+    if(!k) continue;
+    const c = DATA.en2code[norm(k)] || ESPN_ALIAS[norm(k)];
+    if(c) return c;
+  }
+  return null;
+}
+function findFixture(grp, a, b){
+  const key = [a,b].sort().join('-');
+  return DATA.fixtures.find(f=> [f.home,f.away].sort().join('-')===key && (!grp || f.group===grp)) || null;
+}
+// Lee marcadores EN VIVO del scoreboard público de ESPN (sin clave) -> { n:{l,v,clock} }
+async function fetchEspnLive(){
+  const p = x => String(x).padStart(2,'0');
+  const fmt = x => x.getFullYear()+''+p(x.getMonth()+1)+p(x.getDate());
+  const d = new Date(), y = new Date(d), t = new Date(d);
+  y.setDate(d.getDate()-1); t.setDate(d.getDate()+1);
+  const url = DATA.espnUrl+'?dates='+fmt(y)+'-'+fmt(t)+'&limit=200';
+  const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 8000);
+  let events;
+  try{
+    const r = await fetch(url, {cache:'no-store', signal:ctrl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    events = (await r.json()).events || [];
+  } finally { clearTimeout(to); }
+  const live = {};
+  for(const e of events){
+    const c = e.competitions && e.competitions[0];
+    if(!c || !c.status || !c.status.type) continue;
+    if(c.status.type.state !== 'in') continue;          // solo partidos en curso
+    const cs = c.competitors || [];
+    const H = cs.find(x=>x.homeAway==='home'), A = cs.find(x=>x.homeAway==='away');
+    if(!H || !A) continue;
+    const hc = espnCode(H.team), ac = espnCode(A.team);
+    if(!hc || !ac) continue;
+    const grp = (((c.altGameNote||e.altGameNote||'').match(/Group\s+([A-L])/i)||[])[1]||'').toUpperCase();
+    const f = findFixture(grp, hc, ac);
+    if(!f) continue;
+    const hs = parseInt(H.score,10)||0, as = parseInt(A.score,10)||0;
+    const clock = c.status.displayClock || (c.status.type.shortDetail||'') || 'EN VIVO';
+    live[f.n] = (hc===f.home) ? {l:hs, v:as, clock} : {l:as, v:hs, clock};
+  }
+  liveGames = live;
+}
+function currentMatch(results){
+  // 1) en vivo ahora (ESPN), aún sin resultado final
+  const liveN = Object.keys(liveGames).map(Number).filter(n=>!results[n]).sort((a,b)=>a-b);
+  if(liveN.length){
+    const f = DATA.fixtures.find(x=>x.n===liveN[0]);
+    return {f, mode:'live', score:liveGames[liveN[0]], moreLive:liveN.length-1};
+  }
+  // 2) programado para hoy, sin final y sin marcador en vivo todavía
+  const ymd = todayYMD();
+  const pend = DATA.fixtures.filter(f=>!results[f.n]);
+  const today = pend.filter(f=>f.date===ymd).sort((a,b)=>a.n-b.n);
+  if(today.length) return {f:today[0], mode:'today', moreToday:today.length-1};
+  // 3) próximo partido futuro
+  const fut = pend.filter(f=>f.date>ymd).sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : a.n-b.n);
+  if(fut.length) return {f:fut[0], mode:'next'};
+  return null;
+}
+function provisional(f, l, v){
+  const rows = DATA.participants.map(p=>{
+    const pr = p.preds[f.n-1]; let pts=0, cls='p0';
+    if(pr){ if(pr[0]===l&&pr[1]===v){pts=PTS_EXACTO;cls='p3';}
+            else if(sgn(pr[0],pr[1])===sgn(l,v)){pts=PTS_RESULTADO;cls='p1';} }
+    return {name:p.name, pr, pts, cls};
+  });
+  rows.sort((a,b)=> b.pts-a.pts || a.name.localeCompare(b.name,'es'));
+  return rows;
+}
+function renderLive(results){
+  const host = $('#live'); if(!host) return;
+  const badge = $('#liveBadge');
+  const cm = currentMatch(results);
+  if(badge) badge.style.display = (cm && cm.mode==='live') ? '' : 'none';
+  if(!cm){ host.innerHTML='<div class="empty">La fase de grupos terminó. ¡Gracias por jugar! 🏆</div>'; return; }
+  const f = cm.f, fh = DATA.flags[f.home]||'', fa = DATA.flags[f.away]||'';
+  let tag, scoreBlock, body, cap;
+  if(cm.mode==='live'){
+    const l = cm.score.l, v = cm.score.v;
+    const rows = provisional(f, l, v);
+    const w = rows.filter(r=>r.pts>0).length;
+    tag = '<span class="livetag"><span class="dot"></span> EN VIVO'+(cm.score.clock?' · '+cm.score.clock:'')+'</span>'
+        + (cm.moreLive ? '<span class="lmore">+'+cm.moreLive+' en vivo</span>' : '');
+    scoreBlock = '<span class="lvscore"><b>'+l+'</b><i>:</i><b>'+v+'</b></span>';
+    body = rows.map(r=>{
+      const prs = r.pr ? r.pr[0]+'-'+r.pr[1] : '—';
+      return '<div class="lrow'+(r.pts>0?' win':'')+'"><span class="lname">'+r.name+'</span>'
+        + '<span class="lpred">'+prs+'</span><span class="pp '+r.cls+'">+'+r.pts+'</span></div>';
+    }).join('');
+    cap = 'Marcador en vivo (se actualiza solo). Puntos <b>provisionales</b> con <b>'+l+'-'+v+'</b>: '
+        + (w ? 'sumarían <b>'+w+'</b> de 9.' : 'nadie suma aún.');
+  } else {
+    const dateTxt = new Date(f.date+'T00:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short'});
+    tag = cm.mode==='today'
+      ? '<span class="nexttag">⏳ HOY'+(cm.moreToday?' · +'+cm.moreToday+' más':'')+'</span>'
+      : '<span class="nexttag">⏭ PRÓXIMO · '+dateTxt+'</span>';
+    scoreBlock = '<span class="lvscore" style="opacity:.45"><b>–</b><i>:</i><b>–</b></span>';
+    body = DATA.participants.map(p=>{
+      const pr = p.preds[f.n-1]; const prs = pr ? pr[0]+'-'+pr[1] : '—';
+      return '<div class="lrow"><span class="lname">'+p.name+'</span><span class="lpred">pronóstico '+prs+'</span></div>';
+    }).join('');
+    cap = cm.mode==='today'
+      ? 'Aún no comienza. Cuando arranque, el marcador y los puntos se actualizan solos. Pronósticos:'
+      : 'Cuando se juegue aparece aquí solo, con marcador en vivo y puntos. Pronósticos:';
+  }
+  host.innerHTML =
+    '<div class="livecard">'
+    + '<div class="lvtop">'+tag+'</div>'
+    + '<div class="lvmatch">'
+    +   '<span class="lvtm">'+fh+' '+f.home+'</span>'+scoreBlock+'<span class="lvtm">'+f.away+' '+fa+'</span>'
+    + '</div>'
+    + '<div class="lvcap">'+cap+'</div>'
+    + '<div class="lvlist">'+body+'</div>'
+    + '</div>';
+}
+
 function renderPointsTable(results){
   const host = document.querySelector('#ptable');
   const played = DATA.fixtures.filter(f=>results[f.n])
@@ -483,3 +642,4 @@ setInterval(tickClock, 1000);
 </script>
 </body>
 </html>
+
