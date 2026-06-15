@@ -196,6 +196,9 @@ body{
 .lvscore b{min-width:26px;text-align:center;font-size:30px;color:var(--gold);line-height:1}
 .lvscore i{color:var(--muted);font-style:normal;font-size:22px;margin:0 1px}
 .lvcap{color:var(--muted);font-size:12px;line-height:1.5;margin:8px 2px 12px;text-align:center}
+.countdown{display:block;text-align:center;margin:2px 0 10px;font-weight:800;font-size:15px;color:var(--gold);
+  font-variant-numeric:tabular-nums;letter-spacing:.4px}
+.countdown b{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:20px;letter-spacing:1px}
 .lvcap b{color:var(--cream)}
 .lvlist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .lrow{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
@@ -225,7 +228,7 @@ body{
   <div class="eyebrow">Tabla de posiciones</div>
   <div id="standings"></div>
 
-  <div class="eyebrow">Partido en juego</div>
+  <div class="eyebrow" id="liveTitle">Próximo partido</div>
   <div id="live"></div>
 
   <div class="eyebrow">Últimos resultados</div>
@@ -264,6 +267,7 @@ const sgn = (a,b) => a>b?1:(a<b?-1:0);
 let lastFetch = null;        // Date of last successful live fetch
 let curResults = {};         // { n: [l,v] }
 let liveGames = {};          // { n: {l, v, clock} } partidos en juego (vía ESPN)
+let kickoffs  = {};          // { n: ISO_UTC } hora de inicio de cada partido (vía ESPN)
 
 // Parse live feed -> { n: [l,v] } oriented to each fixture's home/away
 function resultsFromFeed(matches){
@@ -502,24 +506,20 @@ function findFixture(grp, a, b){
   return DATA.fixtures.find(f=> [f.home,f.away].sort().join('-')===key && (!grp || f.group===grp)) || null;
 }
 // Lee marcadores EN VIVO del scoreboard público de ESPN (sin clave) -> { n:{l,v,clock} }
-async function fetchEspnLive(){
-  const p = x => String(x).padStart(2,'0');
-  const fmt = x => x.getFullYear()+''+p(x.getMonth()+1)+p(x.getDate());
-  const d = new Date(), y = new Date(d), t = new Date(d);
-  y.setDate(d.getDate()-1); t.setDate(d.getDate()+1);
-  const url = DATA.espnUrl+'?dates='+fmt(y)+'-'+fmt(t)+'&limit=200';
+async function espnFetch(range){
   const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 8000);
-  let events;
   try{
-    const r = await fetch(url, {cache:'no-store', signal:ctrl.signal});
+    const r = await fetch(DATA.espnUrl+'?dates='+range+'&limit=950', {cache:'no-store', signal:ctrl.signal});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    events = (await r.json()).events || [];
+    return (await r.json()).events || [];
   } finally { clearTimeout(to); }
+}
+// Procesa eventos de ESPN: guarda la hora de inicio de cada partido y, si markLive, los que están en curso
+function ingestEvents(events, markLive){
   const live = {};
   for(const e of events){
     const c = e.competitions && e.competitions[0];
-    if(!c || !c.status || !c.status.type) continue;
-    if(c.status.type.state !== 'in') continue;          // solo partidos en curso
+    if(!c) continue;
     const cs = c.competitors || [];
     const H = cs.find(x=>x.homeAway==='home'), A = cs.find(x=>x.homeAway==='away');
     if(!H || !A) continue;
@@ -528,11 +528,44 @@ async function fetchEspnLive(){
     const grp = (((c.altGameNote||e.altGameNote||'').match(/Group\s+([A-L])/i)||[])[1]||'').toUpperCase();
     const f = findFixture(grp, hc, ac);
     if(!f) continue;
-    const hs = parseInt(H.score,10)||0, as = parseInt(A.score,10)||0;
-    const clock = c.status.displayClock || (c.status.type.shortDetail||'') || 'EN VIVO';
-    live[f.n] = (hc===f.home) ? {l:hs, v:as, clock} : {l:as, v:hs, clock};
+    const iso = c.date || e.date;
+    if(iso) kickoffs[f.n] = iso;                       // hora de inicio (UTC) para mostrar en hora de Chile
+    if(markLive && c.status && c.status.type && c.status.type.state==='in'){
+      const hs = parseInt(H.score,10)||0, as = parseInt(A.score,10)||0;
+      const clock = c.status.displayClock || (c.status.type.shortDetail||'') || 'EN VIVO';
+      live[f.n] = (hc===f.home) ? {l:hs, v:as, clock} : {l:as, v:hs, clock};
+    }
   }
-  liveGames = live;
+  if(markLive) liveGames = live;
+}
+async function fetchEspnLive(){
+  const p = x => String(x).padStart(2,'0');
+  const fmt = x => x.getFullYear()+''+p(x.getMonth()+1)+p(x.getDate());
+  const d = new Date(), y = new Date(d), t = new Date(d);
+  y.setDate(d.getDate()-1); t.setDate(d.getDate()+1);
+  ingestEvents(await espnFetch(fmt(y)+'-'+fmt(t)), true);   // en vivo + horas cercanas
+}
+async function fetchSchedule(){
+  // toda la fase de grupos, una vez, para conocer fecha y hora de cada partido
+  ingestEvents(await espnFetch('20260611-20260628'), false);
+  render(curResults);                                      // refresca para mostrar la hora del próximo
+}
+// Fecha y hora de inicio en huso horario de Santiago de Chile
+function kickoffTxt(n){
+  const iso = kickoffs[n]; if(!iso) return null;
+  const d = new Date(iso); if(isNaN(d)) return null;
+  const opt = {timeZone:'America/Santiago'};
+  const fecha = d.toLocaleDateString('es-CL', {...opt, weekday:'short', day:'numeric', month:'short'});
+  const hora  = d.toLocaleTimeString('es-CL', {...opt, hour:'2-digit', minute:'2-digit', hour12:false});
+  return {fecha, hora};
+}
+function byKickoff(list){
+  return list.slice().sort((a,b)=>{
+    const da = kickoffs[a.n]?Date.parse(kickoffs[a.n]):Infinity;
+    const db = kickoffs[b.n]?Date.parse(kickoffs[b.n]):Infinity;
+    if(da!==db) return da-db;
+    return a.date<b.date?-1 : a.date>b.date?1 : a.n-b.n;
+  });
 }
 function currentMatch(results){
   // 1) en vivo ahora (ESPN), aún sin resultado final
@@ -541,13 +574,12 @@ function currentMatch(results){
     const f = DATA.fixtures.find(x=>x.n===liveN[0]);
     return {f, mode:'live', score:liveGames[liveN[0]], moreLive:liveN.length-1};
   }
-  // 2) programado para hoy, sin final y sin marcador en vivo todavía
+  // 2) próximo: el partido pendiente con hora de inicio más cercana (o por fecha si no hay hora)
   const ymd = todayYMD();
   const pend = DATA.fixtures.filter(f=>!results[f.n]);
-  const today = pend.filter(f=>f.date===ymd).sort((a,b)=>a.n-b.n);
-  if(today.length) return {f:today[0], mode:'today', moreToday:today.length-1};
-  // 3) próximo partido futuro
-  const fut = pend.filter(f=>f.date>ymd).sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : a.n-b.n);
+  const today = byKickoff(pend.filter(f=>f.date===ymd));
+  if(today.length) return {f:today[0], mode:'next', moreToday:today.length-1};
+  const fut = byKickoff(pend.filter(f=>f.date>ymd));
   if(fut.length) return {f:fut[0], mode:'next'};
   return null;
 }
@@ -563,12 +595,14 @@ function provisional(f, l, v){
 }
 function renderLive(results){
   const host = $('#live'); if(!host) return;
-  const badge = $('#liveBadge');
+  const badge = $('#liveBadge'), title = $('#liveTitle');
   const cm = currentMatch(results);
-  if(badge) badge.style.display = (cm && cm.mode==='live') ? '' : 'none';
+  const isLive = !!(cm && cm.mode==='live');
+  if(badge) badge.style.display = isLive ? '' : 'none';
+  if(title) title.textContent = isLive ? 'Partido en juego' : 'Próximo partido';
   if(!cm){ host.innerHTML='<div class="empty">La fase de grupos terminó. ¡Gracias por jugar! 🏆</div>'; return; }
   const f = cm.f, fh = DATA.flags[f.home]||'', fa = DATA.flags[f.away]||'';
-  let tag, scoreBlock, body, cap;
+  let tag, scoreBlock, body, cap, countdown='';
   if(cm.mode==='live'){
     const l = cm.score.l, v = cm.score.v;
     const rows = provisional(f, l, v);
@@ -584,18 +618,19 @@ function renderLive(results){
     cap = 'Marcador en vivo (se actualiza solo). Puntos <b>provisionales</b> con <b>'+l+'-'+v+'</b>: '
         + (w ? 'sumarían <b>'+w+'</b> de 9.' : 'nadie suma aún.');
   } else {
-    const dateTxt = new Date(f.date+'T00:00:00').toLocaleDateString('es-CL',{day:'numeric',month:'short'});
-    tag = cm.mode==='today'
-      ? '<span class="nexttag">⏳ HOY'+(cm.moreToday?' · +'+cm.moreToday+' más':'')+'</span>'
-      : '<span class="nexttag">⏭ PRÓXIMO · '+dateTxt+'</span>';
+    const k = kickoffTxt(f.n);
+    const when = k ? (k.fecha+' · '+k.hora+' hrs')
+                   : new Date(f.date+'T00:00:00').toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'});
+    tag = '<span class="nexttag">🗓️ '+when+'</span>';
     scoreBlock = '<span class="lvscore" style="opacity:.45"><b>–</b><i>:</i><b>–</b></span>';
+    const target = kickoffs[f.n] ? Date.parse(kickoffs[f.n]) : null;
+    countdown = target ? '<div class="countdown" id="cd" data-kick="'+target+'">⏳ Faltan <b>--:--:--</b></div>' : '';
     body = DATA.participants.map(p=>{
       const pr = p.preds[f.n-1]; const prs = pr ? pr[0]+'-'+pr[1] : '—';
       return '<div class="lrow"><span class="lname">'+p.name+'</span><span class="lpred">pronóstico '+prs+'</span></div>';
     }).join('');
-    cap = cm.mode==='today'
-      ? 'Aún no comienza. Cuando arranque, el marcador y los puntos se actualizan solos. Pronósticos:'
-      : 'Cuando se juegue aparece aquí solo, con marcador en vivo y puntos. Pronósticos:';
+    cap = (k ? 'Comienza el <b>'+k.fecha+'</b> a las <b>'+k.hora+' hrs</b> (hora de Chile). ' : 'Aún no comienza. ')
+        + 'Cuando arranque, el marcador y los puntos se actualizan solos. Pronósticos:';
   }
   host.innerHTML =
     '<div class="livecard">'
@@ -603,9 +638,27 @@ function renderLive(results){
     + '<div class="lvmatch">'
     +   '<span class="lvtm">'+fh+' '+f.home+'</span>'+scoreBlock+'<span class="lvtm">'+f.away+' '+fa+'</span>'
     + '</div>'
+    + countdown
     + '<div class="lvcap">'+cap+'</div>'
     + '<div class="lvlist">'+body+'</div>'
     + '</div>';
+  tickCountdown();   // pinta el contador de inmediato
+}
+// Contador regresivo al próximo partido (hrs:min:seg); al llegar a 0 refresca para pasar a EN VIVO
+function tickCountdown(){
+  const el = document.getElementById('cd');
+  if(!el) return;
+  const target = +el.getAttribute('data-kick'); if(!target) return;
+  let s = Math.floor((target - Date.now())/1000);
+  if(s <= 0){
+    el.innerHTML = '⏳ <b>Comenzando…</b>';
+    if(!el._fired){ el._fired = true; fetchLive(); }
+    return;
+  }
+  const pad = x => String(x).padStart(2,'0');
+  const h = Math.floor(s/3600); s %= 3600;
+  const m = Math.floor(s/60), ss = s%60;
+  el.innerHTML = '⏳ Faltan <b>'+pad(h)+':'+pad(m)+':'+pad(ss)+'</b>';
 }
 
 function renderPointsTable(results){
@@ -636,9 +689,11 @@ function renderPointsTable(results){
 $('#refresh').addEventListener('click', fetchLive);
 // initial paint with snapshot, then go live
 render(Object.fromEntries(Object.entries(DATA.fallback)));
+fetchSchedule().catch(()=>{});   // horas de inicio (una vez)
 fetchLive();
 setInterval(fetchLive, 60000);
 setInterval(tickClock, 1000);
+setInterval(tickCountdown, 1000);
 </script>
 </body>
 </html>
