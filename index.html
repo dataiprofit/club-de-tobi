@@ -190,6 +190,16 @@ body{
 .nexttag{display:inline-flex;align-items:center;gap:7px;background:rgba(255,194,60,.12);color:#ffdc93;
   border:1px solid rgba(255,194,60,.34);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:1px}
 .lmore{color:var(--muted);font-size:11px;font-weight:700}
+.finaltag{display:inline-flex;align-items:center;gap:7px;background:rgba(63,182,122,.13);color:#9fe7c2;
+  border:1px solid rgba(63,182,122,.4);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:1.1px}
+.lvscore.final b{color:var(--cream)}
+.lvscore.final i{color:var(--pitch)}
+.commentary{display:flex;gap:9px;align-items:flex-start;margin:0 2px 12px;padding:9px 11px;
+  background:rgba(255,92,58,.07);border:1px solid rgba(255,92,58,.22);border-radius:11px}
+.commentary .cmin{flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.5px;
+  color:var(--coral);min-width:30px;line-height:1.35}
+.commentary .ctxt{flex:1;font-size:12.5px;line-height:1.45;color:var(--cream)}
+.commentary .clbl{display:block;font-size:9.5px;letter-spacing:1.4px;font-weight:800;color:var(--muted);margin-bottom:2px}
 .lvmatch{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:6px 0 2px}
 .lvtm{font-weight:800;font-size:16px;letter-spacing:.2px}
 .lvscore{display:inline-flex;align-items:center;gap:6px;font-family:'Bebas Neue',sans-serif}
@@ -264,10 +274,18 @@ const PTS_RESULTADO = 3;
 const $ = s => document.querySelector(s);
 const norm = s => s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
 const sgn = (a,b) => a>b?1:(a<b?-1:0);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let lastFetch = null;        // Date of last successful live fetch
 let curResults = {};         // { n: [l,v] }
+let liveSig = null;          // firma del estado mostrado en la sección "en vivo / próximo"
 let liveGames = {};          // { n: {l, v, clock} } partidos en juego (vía ESPN)
 let kickoffs  = {};          // { n: ISO_UTC } hora de inicio de cada partido (vía ESPN)
+let finishedGames = {};      // { n: {l, v, at} } partidos terminados (at = ms aprox. de término)
+let seenLive  = {};          // { n: true } partidos que vimos EN VIVO en esta sesión
+let espnId    = {};          // { n: eventId } id del partido en ESPN (para el comentario)
+let commentary = {};         // { n: {text, min} } última jugada narrada (vía ESPN)
+const FINISHED_WINDOW = 5*60*1000;   // mostrar "Partido finalizado" por 5 min tras el término
+const MATCH_MS = 120*60*1000;        // duración aprox. para estimar el término al recargar
 
 // Parse live feed -> { n: [l,v] } oriented to each fixture's home/away
 function resultsFromFeed(matches){
@@ -381,6 +399,11 @@ function tickClock(){ $('#mUpd').textContent = relTime(lastFetch); }
 
 async function fetchLive(){
   try{ await fetchEspnLive(); }catch(e){ /* sin marcador en vivo ahora; la tabla sigue funcionando */ }
+  // comentario de la última jugada del partido en juego (≈ cada minuto, junto al ciclo de actualización)
+  try{
+    const liveN = Object.keys(liveGames).map(Number).filter(n=>!curResults[n]).sort((a,b)=>a-b);
+    if(liveN.length) await fetchCommentary(liveN[0]);
+  }catch(e){ /* sin comentario ahora */ }
   try{
     const res = await fetch(DATA.feedUrl, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -530,10 +553,25 @@ function ingestEvents(events, markLive){
     if(!f) continue;
     const iso = c.date || e.date;
     if(iso) kickoffs[f.n] = iso;                       // hora de inicio (UTC) para mostrar en hora de Chile
-    if(markLive && c.status && c.status.type && c.status.type.state==='in'){
+    if(e.id) espnId[f.n] = String(e.id);               // id de ESPN para traer el comentario
+    if(markLive && c.status && c.status.type){
+      const st = c.status.type.state;
       const hs = parseInt(H.score,10)||0, as = parseInt(A.score,10)||0;
-      const clock = c.status.displayClock || (c.status.type.shortDetail||'') || 'EN VIVO';
-      live[f.n] = (hc===f.home) ? {l:hs, v:as, clock} : {l:as, v:hs, clock};
+      if(st==='in'){
+        const clock = c.status.displayClock || (c.status.type.shortDetail||'') || 'EN VIVO';
+        live[f.n] = (hc===f.home) ? {l:hs, v:as, clock} : {l:as, v:hs, clock};
+        seenLive[f.n] = true;                          // lo estamos viendo en vivo
+      } else if(st==='post'){
+        const sc = (hc===f.home) ? {l:hs, v:as} : {l:as, v:hs};
+        if(finishedGames[f.n]){                         // ya registrado: solo refrescamos el marcador
+          finishedGames[f.n].l = sc.l; finishedGames[f.n].v = sc.v;
+        } else {
+          // momento del término: si lo vimos en vivo, recién ahora; si no, lo estimamos por la hora de inicio
+          const at = seenLive[f.n] ? Date.now()
+                   : (kickoffs[f.n] ? Date.parse(kickoffs[f.n]) + MATCH_MS : Date.now());
+          finishedGames[f.n] = {l:sc.l, v:sc.v, at};
+        }
+      }
     }
   }
   if(markLive) liveGames = live;
@@ -549,6 +587,32 @@ async function fetchSchedule(){
   // toda la fase de grupos, una vez, para conocer fecha y hora de cada partido
   ingestEvents(await espnFetch('20260611-20260628'), false);
   render(curResults);                                      // refresca para mostrar la hora del próximo
+}
+// Último comentario de jugada (en español) del partido en juego, vía el resumen público de ESPN
+const ESPN_SUMMARY_URL = DATA.espnUrl.replace('/scoreboard','/summary');
+async function fetchCommentary(n){
+  const id = espnId[n]; if(!id) return;
+  const url = ESPN_SUMMARY_URL+'?event='+id+'&lang=es&region=cl';
+  const ctrl = new AbortController(); const to = setTimeout(()=>ctrl.abort(), 8000);
+  try{
+    const r = await fetch(url, {cache:'no-store', signal:ctrl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    let txt='', min='';
+    const arr = Array.isArray(j.commentary) ? j.commentary : [];
+    if(arr.length){
+      // el de mayor 'sequence' es el más reciente
+      const last = arr.slice().sort((a,b)=>(+b.sequence||0)-(+a.sequence||0))[0];
+      txt = (last.text||'').trim();
+      min = (last.time && last.time.displayValue) || '';
+    } else if(Array.isArray(j.keyEvents) && j.keyEvents.length){
+      const ke = j.keyEvents[j.keyEvents.length-1];
+      txt = (ke.text || (ke.type && ke.type.text) || '').trim();
+      min = (ke.clock && ke.clock.displayValue) || '';
+    }
+    if(txt) commentary[n] = {text:txt, min};
+  }catch(e){ /* sin comentario disponible ahora */ }
+  finally{ clearTimeout(to); }
 }
 // Fecha y hora de inicio en huso horario de Santiago de Chile
 function kickoffTxt(n){
@@ -568,15 +632,30 @@ function byKickoff(list){
   });
 }
 function currentMatch(results){
-  // 1) en vivo ahora (ESPN), aún sin resultado final
+  const NOW = Date.now();
+  // 1) EN VIVO ahora (ESPN), aún sin resultado final
   const liveN = Object.keys(liveGames).map(Number).filter(n=>!results[n]).sort((a,b)=>a-b);
   if(liveN.length){
     const f = DATA.fixtures.find(x=>x.n===liveN[0]);
     return {f, mode:'live', score:liveGames[liveN[0]], moreLive:liveN.length-1};
   }
-  // 2) próximo: el partido pendiente con hora de inicio más cercana (o por fecha si no hay hora)
+  // 2) RECIÉN FINALIZADO: terminó hace ≤5 min -> mantenemos el marcador final visible
+  const finN = Object.keys(finishedGames).map(Number)
+    .filter(n=> (NOW - finishedGames[n].at) <= FINISHED_WINDOW && (NOW - finishedGames[n].at) >= -60000)
+    .sort((a,b)=> finishedGames[b].at - finishedGames[a].at);   // el más reciente primero
+  if(finN.length){
+    const f = DATA.fixtures.find(x=>x.n===finN[0]);
+    return {f, mode:'finished', score:finishedGames[finN[0]], moreFinished:finN.length-1};
+  }
+  // 3) PRÓXIMO: el pendiente con inicio más cercano, EXCLUYENDO los que ya comenzaron/terminaron
   const ymd = todayYMD();
-  const pend = DATA.fixtures.filter(f=>!results[f.n]);
+  const pend = DATA.fixtures.filter(f=>{
+    if(results[f.n]) return false;                              // ya tiene resultado final
+    if(finishedGames[f.n]) return false;                        // ESPN lo marca terminado
+    const k = kickoffs[f.n] ? Date.parse(kickoffs[f.n]) : null;
+    if(k && k <= NOW) return false;                             // ya pasó su hora de inicio (en juego o recién terminado)
+    return true;
+  });
   const today = byKickoff(pend.filter(f=>f.date===ymd));
   if(today.length) return {f:today[0], mode:'next', moreToday:today.length-1};
   const fut = byKickoff(pend.filter(f=>f.date>ymd));
@@ -593,16 +672,27 @@ function provisional(f, l, v){
   rows.sort((a,b)=> b.pts-a.pts || a.name.localeCompare(b.name,'es'));
   return rows;
 }
+// firma del estado actual: si cambia, repintamos la sección (p. ej. al pasar de "finalizado" a "próximo")
+function sigOf(cm){
+  if(!cm) return 'none';
+  const sc = cm.score ? cm.score.l+'-'+cm.score.v+(cm.score.clock?'@'+cm.score.clock:'') : '';
+  const cmt = cm.mode==='live' && commentary[cm.f.n] ? '|'+(commentary[cm.f.n].min||'')+commentary[cm.f.n].text.length : '';
+  return cm.mode+'|'+cm.f.n+'|'+sc+cmt;
+}
 function renderLive(results){
   const host = $('#live'); if(!host) return;
   const badge = $('#liveBadge'), title = $('#liveTitle');
   const cm = currentMatch(results);
   const isLive = !!(cm && cm.mode==='live');
   if(badge) badge.style.display = isLive ? '' : 'none';
-  if(title) title.textContent = isLive ? 'Partido en juego' : 'Próximo partido';
+  if(title) title.textContent = !cm ? 'Próximo partido'
+    : cm.mode==='live' ? 'Partido en juego'
+    : cm.mode==='finished' ? 'Partido finalizado'
+    : 'Próximo partido';
+  liveSig = sigOf(cm);   // recordamos qué se está mostrando para detectar cambios de estado
   if(!cm){ host.innerHTML='<div class="empty">La fase de grupos terminó. ¡Gracias por jugar! 🏆</div>'; return; }
   const f = cm.f, fh = DATA.flags[f.home]||'', fa = DATA.flags[f.away]||'';
-  let tag, scoreBlock, body, cap, countdown='';
+  let tag, scoreBlock, body, cap, countdown='', comm='';
   if(cm.mode==='live'){
     const l = cm.score.l, v = cm.score.v;
     const rows = provisional(f, l, v);
@@ -610,6 +700,11 @@ function renderLive(results){
     tag = '<span class="livetag"><span class="dot"></span> EN VIVO'+(cm.score.clock?' · '+cm.score.clock:'')+'</span>'
         + (cm.moreLive ? '<span class="lmore">+'+cm.moreLive+' en vivo</span>' : '');
     scoreBlock = '<span class="lvscore"><b>'+l+'</b><i>:</i><b>'+v+'</b></span>';
+    const cmt = commentary[f.n];
+    if(cmt && cmt.text){
+      comm = '<div class="commentary"><span class="cmin">'+(cmt.min||'·')+'</span>'
+           + '<span class="ctxt"><span class="clbl">ÚLTIMA JUGADA</span>'+esc(cmt.text)+'</span></div>';
+    }
     body = rows.map(r=>{
       const prs = r.pr ? r.pr[0]+'-'+r.pr[1] : '—';
       return '<div class="lrow'+(r.pts>0?' win':'')+'"><span class="lname">'+r.name+'</span>'
@@ -617,6 +712,21 @@ function renderLive(results){
     }).join('');
     cap = 'Marcador en vivo (se actualiza solo). Puntos <b>provisionales</b> con <b>'+l+'-'+v+'</b>: '
         + (w ? 'sumarían <b>'+w+'</b> de 9.' : 'nadie suma aún.');
+  } else if(cm.mode==='finished'){
+    const l = cm.score.l, v = cm.score.v;
+    const rows = provisional(f, l, v);
+    const w = rows.filter(r=>r.pts>0).length;
+    tag = '<span class="finaltag">✓ Partido finalizado</span>'
+        + (cm.moreFinished ? '<span class="lmore">+'+cm.moreFinished+' recién</span>' : '');
+    scoreBlock = '<span class="lvscore final"><b>'+l+'</b><i>:</i><b>'+v+'</b></span>';
+    body = rows.map(r=>{
+      const prs = r.pr ? r.pr[0]+'-'+r.pr[1] : '—';
+      return '<div class="lrow'+(r.pts>0?' win':'')+'"><span class="lname">'+r.name+'</span>'
+        + '<span class="lpred">'+prs+'</span><span class="pp '+r.cls+'">+'+r.pts+'</span></div>';
+    }).join('');
+    cap = 'Resultado <b>final</b> '+l+'-'+v+'. '
+        + (w ? '<b>'+w+'</b> de 9 sumaron en este partido.' : 'Nadie sumó en este partido.')
+        + ' El próximo partido aparece en unos minutos.';
   } else {
     const k = kickoffTxt(f.n);
     const when = k ? (k.fecha+' · '+k.hora+' hrs')
@@ -639,6 +749,7 @@ function renderLive(results){
     +   '<span class="lvtm">'+fh+' '+f.home+'</span>'+scoreBlock+'<span class="lvtm">'+f.away+' '+fa+'</span>'
     + '</div>'
     + countdown
+    + comm
     + '<div class="lvcap">'+cap+'</div>'
     + '<div class="lvlist">'+body+'</div>'
     + '</div>';
@@ -694,7 +805,11 @@ fetchLive();
 setInterval(fetchLive, 60000);
 setInterval(tickClock, 1000);
 setInterval(tickCountdown, 1000);
+// vigila cambios de estado (live ↔ finalizado ↔ próximo) sin esperar el ciclo de 60s
+function liveWatch(){
+  if(sigOf(currentMatch(curResults)) !== liveSig) renderLive(curResults);
+}
+setInterval(liveWatch, 1000);
 </script>
 </body>
 </html>
-
