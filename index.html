@@ -157,6 +157,13 @@ body{
 .chart.dim .ln.on{opacity:1;stroke-width:3.6}
 .chart.dim circle{opacity:.14}
 .chart.dim circle.on{opacity:1}
+.chart .lbl{font-family:Inter;font-size:11px;font-weight:800;dominant-baseline:middle;paint-order:stroke;
+  stroke:rgba(11,20,22,.85);stroke-width:2.6px;stroke-linejoin:round;transition:opacity .15s}
+.chart .lblln{stroke-width:1;stroke-dasharray:2 2;opacity:.6;transition:opacity .15s}
+.chart.dim .lbl{opacity:.14}
+.chart.dim .lbl.on{opacity:1}
+.chart.dim .lblln{opacity:.07}
+.chart.dim .lblln.on{opacity:.6}
 .legend2{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .lg{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);
   color:var(--cream);font:inherit;font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:999px;cursor:pointer}
@@ -460,7 +467,7 @@ function renderChart(results){
 
   let maxV=0; series.forEach(s=> maxV=Math.max(maxV,s.cum[lastIdx]));
   const maxY = Math.max(5, Math.ceil(maxV/5)*5);
-  const W=720,H=494,mL=44,mR=14,mT=20,mB=44, iw=W-mL-mR, ih=H-mT-mB;
+  const W=720,H=494,mL=44,mR=92,mT=20,mB=44, iw=W-mL-mR, ih=H-mT-mB;
   const X=i=> mL + (N<=1?0:(i/(N-1))*iw);
   const Y=v=> mT + ih - (v/maxY)*ih;
 
@@ -478,6 +485,30 @@ function renderChart(results){
     lines+='<polyline class="ln" data-p="'+si+'" points="'+p+'" style="stroke:'+s.color+'"/>';
     dots+='<circle data-p="'+si+'" cx="'+X(lastIdx).toFixed(1)+'" cy="'+Y(s.cum[lastIdx]).toFixed(1)+'" r="3.6" style="fill:'+s.color+'"/>'; });
 
+  // Etiquetas con el nombre al lado del punto final, en el color de la línea.
+  // Se separan verticalmente para que no se encimen cuando los puntajes están parejos.
+  const lpx = X(lastIdx);
+  const lab = series.map((s,si)=>({si, name:s.name, color:s.color, py:Y(s.cum[lastIdx])}))
+                    .sort((a,b)=> a.py-b.py);
+  lab.forEach(o=> o.ly = o.py);
+  const GAP = 14, top = mT+2, bot = mT+ih-2;
+  for(let i=0;i<lab.length;i++){                 // empuje hacia abajo
+    if(i===0){ if(lab[i].ly<top) lab[i].ly=top; }
+    else if(lab[i].ly - lab[i-1].ly < GAP) lab[i].ly = lab[i-1].ly + GAP;
+  }
+  if(lab.length && lab[lab.length-1].ly > bot){  // si se pasó por abajo, reacomoda hacia arriba
+    lab[lab.length-1].ly = bot;
+    for(let i=lab.length-2;i>=0;i--) if(lab[i+1].ly - lab[i].ly < GAP) lab[i].ly = lab[i+1].ly - GAP;
+  }
+  let labels='';
+  lab.forEach(o=>{
+    const tx = lpx + 8;
+    labels += '<line class="lblln" data-p="'+o.si+'" x1="'+(lpx+4).toFixed(1)+'" y1="'+o.py.toFixed(1)
+            + '" x2="'+(tx-2).toFixed(1)+'" y2="'+o.ly.toFixed(1)+'" style="stroke:'+o.color+'"/>';
+    labels += '<text class="lbl" data-p="'+o.si+'" x="'+tx.toFixed(1)+'" y="'+o.ly.toFixed(1)
+            + '" style="fill:'+o.color+'">'+esc(o.name)+'</text>';
+  });
+
   host.innerHTML =
     '<svg viewBox="0 0 '+W+' '+H+'" class="chart" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Evolución de puntos por día">'
     + '<text x="'+mL+'" y="13" class="axt">Puntos</text>'
@@ -485,7 +516,7 @@ function renderChart(results){
     + grid + xl
     + '<line x1="'+mL+'" y1="'+mT+'" x2="'+mL+'" y2="'+(mT+ih)+'" class="axis"/>'
     + '<line x1="'+mL+'" y1="'+(mT+ih)+'" x2="'+(W-mR)+'" y2="'+(mT+ih)+'" class="axis"/>'
-    + lines + dots + '</svg>'
+    + lines + dots + labels + '</svg>'
     + '<div class="legend2">'
     + series.map((s,si)=>'<button class="lg" data-p="'+si+'"><span class="sw" style="background:'+s.color+'"></span>'+s.name+' <b>'+s.cum[lastIdx]+'</b></button>').join('')
     + '</div>';
