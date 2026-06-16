@@ -633,7 +633,9 @@ function byKickoff(list){
 }
 function currentMatch(results){
   const NOW = Date.now();
-  // 1) EN VIVO ahora (ESPN), aún sin resultado final
+  const kms = n => kickoffs[n] ? Date.parse(kickoffs[n]) : null;
+  const ended = n => !!results[n] || !!finishedGames[n];        // terminado de verdad (resultado final o ESPN-post)
+  // 1) EN VIVO ahora (ESPN lo marca en juego), aún sin resultado final
   const liveN = Object.keys(liveGames).map(Number).filter(n=>!results[n]).sort((a,b)=>a-b);
   if(liveN.length){
     const f = DATA.fixtures.find(x=>x.n===liveN[0]);
@@ -641,19 +643,27 @@ function currentMatch(results){
   }
   // 2) RECIÉN FINALIZADO: terminó hace ≤5 min -> mantenemos el marcador final visible
   const finN = Object.keys(finishedGames).map(Number)
-    .filter(n=> (NOW - finishedGames[n].at) <= FINISHED_WINDOW && (NOW - finishedGames[n].at) >= -60000)
+    .filter(n=> !results[n] && (NOW - finishedGames[n].at) <= FINISHED_WINDOW && (NOW - finishedGames[n].at) >= -60000)
     .sort((a,b)=> finishedGames[b].at - finishedGames[a].at);   // el más reciente primero
   if(finN.length){
     const f = DATA.fixtures.find(x=>x.n===finN[0]);
     return {f, mode:'finished', score:finishedGames[finN[0]], moreFinished:finN.length-1};
   }
-  // 3) PRÓXIMO: el pendiente con inicio más cercano, EXCLUYENDO los que ya comenzaron/terminaron
+  // 3) YA COMENZÓ pero todavía sin marcador en vivo de ESPN: lo mantenemos en pantalla como "en juego"
+  //    (evita que el dashboard salte al siguiente partido en el lapso entre el inicio y la confirmación de ESPN)
+  const playing = DATA.fixtures.filter(f=>{
+    if(ended(f.n)) return false;
+    const k = kms(f.n); if(k==null) return false;
+    const dt = NOW - k;
+    return dt >= 0 && dt <= MATCH_MS + 30*60*1000;              // desde el inicio hasta ~2h30 después
+  }).sort((a,b)=> kms(a.n)-kms(b.n));
+  if(playing.length) return {f:playing[0], mode:'starting'};
+  // 4) PRÓXIMO: el pendiente con inicio más cercano, EXCLUYENDO los que ya comenzaron/terminaron
   const ymd = todayYMD();
   const pend = DATA.fixtures.filter(f=>{
-    if(results[f.n]) return false;                              // ya tiene resultado final
-    if(finishedGames[f.n]) return false;                        // ESPN lo marca terminado
-    const k = kickoffs[f.n] ? Date.parse(kickoffs[f.n]) : null;
-    if(k && k <= NOW) return false;                             // ya pasó su hora de inicio (en juego o recién terminado)
+    if(ended(f.n)) return false;                                // ya tiene resultado final o ESPN lo marca terminado
+    const k = kms(f.n);
+    if(k!=null && k <= NOW) return false;                       // ya pasó su hora de inicio
     return true;
   });
   const today = byKickoff(pend.filter(f=>f.date===ymd));
@@ -683,10 +693,10 @@ function renderLive(results){
   const host = $('#live'); if(!host) return;
   const badge = $('#liveBadge'), title = $('#liveTitle');
   const cm = currentMatch(results);
-  const isLive = !!(cm && cm.mode==='live');
-  if(badge) badge.style.display = isLive ? '' : 'none';
+  const inPlay = !!(cm && (cm.mode==='live' || cm.mode==='starting'));
+  if(badge) badge.style.display = inPlay ? '' : 'none';
   if(title) title.textContent = !cm ? 'Próximo partido'
-    : cm.mode==='live' ? 'Partido en juego'
+    : (cm.mode==='live' || cm.mode==='starting') ? 'Partido en juego'
     : cm.mode==='finished' ? 'Partido finalizado'
     : 'Próximo partido';
   liveSig = sigOf(cm);   // recordamos qué se está mostrando para detectar cambios de estado
@@ -727,6 +737,15 @@ function renderLive(results){
     cap = 'Resultado <b>final</b> '+l+'-'+v+'. '
         + (w ? '<b>'+w+'</b> de 9 sumaron en este partido.' : 'Nadie sumó en este partido.')
         + ' El próximo partido aparece en unos minutos.';
+  } else if(cm.mode==='starting'){
+    tag = '<span class="livetag"><span class="dot"></span> EN VIVO</span>'
+        + '<span class="lmore">esperando marcador…</span>';
+    scoreBlock = '<span class="lvscore" style="opacity:.55"><b>–</b><i>:</i><b>–</b></span>';
+    body = DATA.participants.map(p=>{
+      const pr = p.preds[f.n-1]; const prs = pr ? pr[0]+'-'+pr[1] : '—';
+      return '<div class="lrow"><span class="lname">'+p.name+'</span><span class="lpred">pronóstico '+prs+'</span></div>';
+    }).join('');
+    cap = 'El partido ya comenzó. En cuanto ESPN publique el marcador, verás el resultado y los puntos provisionales acá. Pronósticos:';
   } else {
     const k = kickoffTxt(f.n);
     const when = k ? (k.fecha+' · '+k.hora+' hrs')
@@ -813,3 +832,5 @@ setInterval(liveWatch, 1000);
 </script>
 </body>
 </html>
+
+
